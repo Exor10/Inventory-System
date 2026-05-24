@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scanner — Inventory System</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Nav ── */
+    nav {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: .75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .nav-brand { font-weight: 700; color: #f1f5f9; font-size: 1rem; }
+    .nav-user  { font-size: .8rem; color: #94a3b8; margin-left: auto; }
+    #adminLinks { display: none; gap: .75rem; }
+    .nav-link {
+      font-size: .8rem;
+      color: #94a3b8;
+      text-decoration: none;
+      padding: .3rem .6rem;
+      border-radius: 6px;
+      transition: background .15s, color .15s;
+    }
+    .nav-link:hover { background: #334155; color: #f1f5f9; }
+    #logoutBtn {
+      font-size: .8rem;
+      color: #94a3b8;
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: .3rem .75rem;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    #logoutBtn:hover { background: #334155; color: #f1f5f9; }
+
+    /* ── Layout ── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 720px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    /* ── Card ── */
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .card-title {
+      font-size: .75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Mode selector ── */
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 560px) {
+      .mode-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .mode-btn {
+      padding: .55rem .25rem;
+      border: 2px solid #334155;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #94a3b8;
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .mode-btn:hover  { background: #1e293b; color: #e2e8f0; }
+    .mode-btn.active { color: #fff; background: #1e293b; }
+
+    /* ── Mode indicator pill ── */
+    #modeIndicator {
+      display: inline-block;
+      padding: .25rem .75rem;
+      border-radius: 999px;
+      font-size: .75rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: .75rem;
+    }
+
+    /* ── Barcode input ── */
+    .barcode-row {
+      display: flex;
+      gap: .5rem;
+      align-items: stretch;
+      margin-bottom: .75rem;
+    }
+    #barcodeInput {
+      flex: 1;
+      padding: .85rem 1rem;
+      background: #0f172a;
+      border: 2px solid #334155;
+      border-radius: 10px;
+      color: #f1f5f9;
+      font-size: 1.1rem;
+      outline: none;
+      transition: border-color .15s;
+      letter-spacing: .05em;
+    }
+    #barcodeInput:focus { border-color: #3b82f6; }
+
+    /* ── Extra fields row ── */
+    .extra-row {
+      display: flex;
+      gap: .5rem;
+      margin-bottom: .75rem;
+      align-items: center;
+    }
+    .extra-row label {
+      font-size: .75rem;
+      font-weight: 600;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+    .extra-row input {
+      flex: 1;
+      padding: .6rem .9rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .extra-row input:focus { border-color: #3b82f6; }
+    #qtyInput { width: 80px; flex: none; text-align: center; }
+
+    /* ── Camera toggle ── */
+    .camera-row {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: .75rem;
+      font-size: .8rem;
+      color: #64748b;
+    }
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #334155;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .2s;
+    }
+    .toggle input:checked + .toggle-slider { background: #3b82f6; }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+    /* ── Camera area ── */
+    #cameraArea {
+      display: none;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: .75rem;
+      border: 1px solid #334155;
+      min-height: 200px;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: .85rem 1.5rem;
+      font-size: .9rem;
+      font-weight: 600;
+      max-width: 90vw;
+      text-align: center;
+      transition: transform .25s ease, opacity .25s;
+      opacity: 0;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.success { border-color: #22c55e; color: #86efac; }
+    .toast.error   { border-color: #ef4444; color: #fca5a5; }
+
+    /* ── History ── */
+    #historyList {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      max-height: 520px;
+      overflow-y: auto;
+    }
+    .history-empty {
+      font-size: .8rem;
+      color: #475569;
+      text-align: center;
+      padding: 2rem 0;
+    }
+    .history-item {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: .6rem .75rem;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto;
+      gap: .15rem .5rem;
+      align-items: start;
+    }
+    .history-item.err { border-color: #7f1d1d; }
+    .history-badge {
+      grid-row: 1;
+      font-size: .65rem;
+      font-weight: 700;
+      padding: .15rem .45rem;
+      border-radius: 4px;
+      color: #fff;
+      white-space: nowrap;
+      align-self: center;
+    }
+    .history-name {
+      grid-row: 1;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .history-detail {
+      grid-column: 1 / -1;
+      font-size: .75rem;
+      color: #64748b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .history-time {
+      display: none; /* shown via detail line */
+    }
+    .history-item.err .history-detail { color: #f87171; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-brand">&#9646;&#9646;&#9646; Inventory</span>
+  <div id="adminLinks">
+    <a href="dashboard.html"   class="nav-link">Dashboard</a>
+    <a href="items-admin.html" class="nav-link">Items</a>
+    <a href="reports.html"     class="nav-link">Reports</a>
+  </div>
+  <span class="nav-user">Signed in as <strong id="userLabel"></strong></span>
+  <button id="logoutBtn">Sign out</button>
+</nav>
+
+<main>
+  <!-- ── Left: scan panel ── -->
+  <div>
+    <div class="card">
+      <div class="card-title">Scan Mode</div>
+
+      <div class="mode-grid">
+        <button class="mode-btn" data-mode="in">Stock IN</button>
+        <button class="mode-btn" data-mode="out">Stock OUT</button>
+        <button class="mode-btn" data-mode="checkout">Check Out</button>
+        <button class="mode-btn" data-mode="checkin">Check In</button>
+        <button class="mode-btn" data-mode="lookup">Lookup</button>
+      </div>
+
+      <div>
+        <span id="modeIndicator">Lookup</span>
+      </div>
+
+      <br>
+
+      <div id="qtyRow" class="extra-row" style="display:none">
+        <label for="qtyInput">Qty</label>
+        <input id="qtyInput" type="number" min="1" value="1">
+      </div>
+
+      <div id="personRow" class="extra-row" style="display:none">
+        <label for="personInput">Person</label>
+        <input id="personInput" type="text" placeholder="Name of person receiving item">
+      </div>
+
+      <div class="barcode-row">
+        <input
+          id="barcodeInput"
+          type="text"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="Scan or type barcode, then press Enter"
+        >
+      </div>
+
+      <div class="camera-row">
+        <label class="toggle">
+          <input type="checkbox" id="cameraToggle">
+          <span class="toggle-slider"></span>
+        </label>
+        Use camera instead
+      </div>
+
+      <div id="cameraArea"></div>
+    </div>
+  </div>
+
+  <!-- ── Right: history ── -->
+  <div>
+    <div class="card">
+      <div class="card-title">Last 10 Scans</div>
+      <ul id="historyList">
+        <li class="history-empty">No scans yet this session</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/scanner.js"></script>
+</body>
+</html>

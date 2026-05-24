@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory System — Login</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .logo svg { width: 48px; height: 48px; margin-bottom: .75rem; }
+
+    .logo h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .logo p {
+      font-size: .8rem;
+      color: #94a3b8;
+      margin-top: .25rem;
+    }
+
+    label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .4rem;
+    }
+
+    input {
+      width: 100%;
+      padding: .7rem .9rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    input:focus { border-color: #3b82f6; }
+
+    .field { margin-bottom: 1.2rem; }
+
+    /* PIN dots display */
+    .pin-wrap { position: relative; }
+    .pin-dots {
+      position: absolute;
+      right: .9rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #334155;
+      transition: background .1s;
+    }
+    .dot.filled { background: #3b82f6; }
+
+    #pin { letter-spacing: .3em; }
+
+    button[type=submit] {
+      width: 100%;
+      padding: .8rem;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+      margin-top: .5rem;
+    }
+
+    button[type=submit]:hover:not(:disabled) { background: #2563eb; }
+    button[type=submit]:disabled { opacity: .5; cursor: not-allowed; }
+
+    .error {
+      background: #7f1d1d;
+      border: 1px solid #ef4444;
+      border-radius: 8px;
+      padding: .7rem .9rem;
+      font-size: .875rem;
+      color: #fca5a5;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-right: .4rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <!-- barcode icon -->
+    <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4"  y="10" width="4"  height="28" rx="1" fill="#3b82f6"/>
+      <rect x="10" y="10" width="2"  height="28" rx="1" fill="#64748b"/>
+      <rect x="14" y="10" width="4"  height="28" rx="1" fill="#3b82f6"/>
+      <rect x="20" y="10" width="2"  height="28" rx="1" fill="#64748b"/>
+      <rect x="24" y="10" width="6"  height="28" rx="1" fill="#3b82f6"/>
+      <rect x="32" y="10" width="2"  height="28" rx="1" fill="#64748b"/>
+      <rect x="36" y="10" width="4"  height="28" rx="1" fill="#3b82f6"/>
+      <rect x="42" y="10" width="2"  height="28" rx="1" fill="#64748b"/>
+    </svg>
+    <h1>Inventory System</h1>
+    <p>Sign in to continue</p>
+  </div>
+
+  <div class="error" id="error"></div>
+
+  <form id="loginForm">
+    <div class="field">
+      <label for="username">Username</label>
+      <input
+        id="username"
+        type="text"
+        autocomplete="username"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        required
+        placeholder="your username"
+      >
+    </div>
+
+    <div class="field">
+      <label for="pin">PIN</label>
+      <div class="pin-wrap">
+        <input
+          id="pin"
+          type="password"
+          inputmode="numeric"
+          pattern="[0-9]{4,6}"
+          maxlength="6"
+          autocomplete="current-password"
+          required
+          placeholder=""
+        >
+        <div class="pin-dots" id="pinDots">
+          <div class="dot" id="d0"></div>
+          <div class="dot" id="d1"></div>
+          <div class="dot" id="d2"></div>
+          <div class="dot" id="d3"></div>
+          <div class="dot" id="d4"></div>
+          <div class="dot" id="d5"></div>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" id="submitBtn">Sign in</button>
+  </form>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  // If already logged in, skip straight to scanner
+  if (auth.isLoggedIn()) window.location.href = 'scanner.html';
+
+  const form      = document.getElementById('loginForm');
+  const usernameEl= document.getElementById('username');
+  const pinEl     = document.getElementById('pin');
+  const errorEl   = document.getElementById('error');
+  const submitBtn = document.getElementById('submitBtn');
+  const dots      = Array.from(document.querySelectorAll('.dot'));
+
+  pinEl.addEventListener('input', () => {
+    const len = pinEl.value.length;
+    dots.forEach((d, i) => d.classList.toggle('filled', i < len));
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    setLoading(true);
+    hideError();
+
+    const username = usernameEl.value.trim();
+    const pin      = pinEl.value.trim();
+
+    const result = await auth.login(username, pin);
+
+    if (result.ok) {
+      window.location.href = 'scanner.html';
+    } else {
+      showError(result.error || 'Login failed');
+      pinEl.value = '';
+      dots.forEach(d => d.classList.remove('filled'));
+      pinEl.focus();
+      setLoading(false);
+    }
+  });
+
+  function setLoading(on) {
+    submitBtn.disabled = on;
+    submitBtn.innerHTML = on
+      ? '<span class="spinner"></span>Signing in…'
+      : 'Sign in';
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+  }
+
+  function hideError() {
+    errorEl.style.display = 'none';
+  }
+
+  usernameEl.focus();
+</script>
+</body>
+</html>
