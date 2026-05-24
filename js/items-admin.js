@@ -1,0 +1,305 @@
+// items-admin.js — searchable item table, add/edit/delete, barcode label printing
+
+(async () => {
+  const user = await auth.requireAdmin();
+  if (!user) return;
+
+  document.getElementById('userLabel').textContent = user.username;
+  document.getElementById('adminLinks').style.display = 'flex';
+  document.getElementById('logoutBtn').addEventListener('click', () => auth.logout());
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  let allItems = [];
+  let locations = [];
+
+  // ── Load data ─────────────────────────────────────────────────
+
+  async function loadItems() {
+    setLoading(true);
+    const res = await api.listItems();
+    setLoading(false);
+    if (!res.ok) { showToast(res.error || 'Failed to load items', 'error'); return; }
+    allItems = res.data;
+    renderTable(filterItems());
+    updateCount();
+  }
+
+  async function loadLocations() {
+    const res = await api.listLocations();
+    locations = res.ok ? res.data.map(l => l.name) : CONFIG.FALLBACK_LOCATIONS;
+    rebuildLocationSelect();
+  }
+
+  function rebuildLocationSelect() {
+    ['itemLocation', 'editLocation'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">— No location —</option>' +
+        locations.map(l => `<option value="${esc(l)}"${l === cur ? ' selected' : ''}>${esc(l)}</option>`).join('');
+    });
+  }
+
+  // ── Filtering ─────────────────────────────────────────────────
+
+  function filterItems() {
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    if (!q) return allItems;
+    return allItems.filter(i =>
+      i.name.toLowerCase().includes(q) ||
+      String(i.barcode).toLowerCase().includes(q) ||
+      (i.location || '').toLowerCase().includes(q) ||
+      (i.item_type || '').toLowerCase().includes(q)
+    );
+  }
+
+  function updateCount() {
+    const visible = filterItems().length;
+    document.getElementById('itemCount').textContent = `${visible} of ${allItems.length} items`;
+  }
+
+  document.getElementById('searchInput').addEventListener('input', () => {
+    renderTable(filterItems());
+    updateCount();
+  });
+
+  // ── Table rendering ───────────────────────────────────────────
+
+  const TYPE_COLOR = { stock: '#38bdf8', asset: '#a78bfa', hybrid: '#fb923c' };
+
+  function renderTable(items) {
+    const tbody = document.getElementById('itemsBody');
+
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">No items found</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = items.map(i => {
+      const color = TYPE_COLOR[i.item_type] || '#64748b';
+      const qty   = i.item_type === 'asset'
+        ? (i.assigned_to ? `<span class="badge-out">out</span>` : `<span class="badge-in">in</span>`)
+        : `<span class="${i.quantity > 0 ? 'qty-ok' : 'qty-zero'}">${i.quantity}</span>`;
+
+      return `
+        <tr data-barcode="${esc(i.barcode)}">
+          <td class="col-name">${esc(i.name)}</td>
+          <td class="mono">${esc(i.barcode)}</td>
+          <td><span class="type-badge" style="color:${color}">${esc(i.item_type)}</span></td>
+          <td>${qty}</td>
+          <td>${esc(i.location || '—')}</td>
+          <td>${esc(i.assigned_to || '—')}</td>
+          <td class="actions-cell">
+            <button class="btn-icon btn-edit" data-barcode="${esc(i.barcode)}" title="Edit">&#9998;</button>
+            <button class="btn-icon btn-delete" data-barcode="${esc(i.barcode)}" title="Delete">&#10005;</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Attach row-level handlers
+    tbody.querySelectorAll('.btn-edit').forEach(btn =>
+      btn.addEventListener('click', () => openEditModal(btn.dataset.barcode))
+    );
+    tbody.querySelectorAll('.btn-delete').forEach(btn =>
+      btn.addEventListener('click', () => confirmDelete(btn.dataset.barcode))
+    );
+  }
+
+  // ── Loading / toast ───────────────────────────────────────────
+
+  function setLoading(on) {
+    document.getElementById('loadingBanner').style.display = on ? '' : 'none';
+  }
+
+  let toastTimer = null;
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = 'toast'; }, 2800);
+  }
+
+  // ── Add modal ─────────────────────────────────────────────────
+
+  document.getElementById('addItemBtn').addEventListener('click', () => {
+    document.getElementById('addForm').reset();
+    rebuildLocationSelect();
+    openModal('addModal');
+  });
+  document.getElementById('closeAddModal').addEventListener('click', () => closeModal('addModal'));
+  document.getElementById('cancelAdd').addEventListener('click', () => closeModal('addModal'));
+
+  document.getElementById('addForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('addSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const item = {
+      barcode:   document.getElementById('itemBarcode').value.trim(),
+      name:      document.getElementById('itemName').value.trim(),
+      item_type: document.getElementById('itemType').value,
+      quantity:  parseInt(document.getElementById('itemQty').value || '0', 10),
+      location:  document.getElementById('itemLocation').value,
+    };
+
+    const res = await api.createItem(item);
+    btn.disabled = false;
+    btn.textContent = 'Add Item';
+
+    if (!res.ok) { showToast(res.error || 'Failed to create item', 'error'); return; }
+    closeModal('addModal');
+    showToast(`"${item.name}" added`);
+    await loadItems();
+  });
+
+  // ── Edit modal ────────────────────────────────────────────────
+
+  document.getElementById('closeEditModal').addEventListener('click', () => closeModal('editModal'));
+  document.getElementById('cancelEdit').addEventListener('click', () => closeModal('editModal'));
+
+  function openEditModal(barcode) {
+    const item = allItems.find(i => String(i.barcode) === String(barcode));
+    if (!item) return;
+
+    document.getElementById('editBarcode').value         = item.barcode;
+    document.getElementById('editBarcodeDisplay').value  = item.barcode;
+    document.getElementById('editName').value            = item.name;
+    document.getElementById('editType').value     = item.item_type;
+    document.getElementById('editQty').value      = item.quantity;
+    rebuildLocationSelect();
+    const locSel = document.getElementById('editLocation');
+    locSel.value = item.location || '';
+    openModal('editModal');
+  }
+
+  document.getElementById('editForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('editSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const item = {
+      barcode:   document.getElementById('editBarcode').value,
+      name:      document.getElementById('editName').value.trim(),
+      item_type: document.getElementById('editType').value,
+      quantity:  parseInt(document.getElementById('editQty').value || '0', 10),
+      location:  document.getElementById('editLocation').value,
+    };
+
+    const res = await api.updateItem(item);
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+
+    if (!res.ok) { showToast(res.error || 'Failed to update item', 'error'); return; }
+    closeModal('editModal');
+    showToast(`"${item.name}" updated`);
+    await loadItems();
+  });
+
+  // ── Delete ────────────────────────────────────────────────────
+
+  async function confirmDelete(barcode) {
+    const item = allItems.find(i => String(i.barcode) === String(barcode));
+    if (!item) return;
+    if (!confirm(`Delete "${item.name}"?\n\nThis is a soft-delete — the item will be hidden but data is preserved.`)) return;
+
+    const res = await api.deleteItem(barcode);
+    if (!res.ok) { showToast(res.error || 'Failed to delete item', 'error'); return; }
+    showToast(`"${item.name}" deleted`);
+    await loadItems();
+  }
+
+  // ── Barcode label printing ────────────────────────────────────
+
+  document.getElementById('printLabelsBtn').addEventListener('click', printLabels);
+
+  function printLabels() {
+    const items = filterItems();
+    if (!items.length) { showToast('No items to print', 'error'); return; }
+
+    const frame = document.getElementById('printFrame');
+    const doc   = frame.contentDocument || frame.contentWindow.document;
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { margin: 0; padding: 8mm; font-family: system-ui, sans-serif; background: #fff; }
+          .grid { display: flex; flex-wrap: wrap; gap: 6mm; }
+          .label {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4mm 5mm;
+            width: 60mm;
+            text-align: center;
+            page-break-inside: avoid;
+          }
+          .label-name {
+            font-size: 8pt;
+            font-weight: 700;
+            margin-bottom: 2mm;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          .label-barcode { display: block; max-width: 100%; }
+          .label-code { font-size: 7pt; color: #666; margin-top: 1mm; }
+        </style>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+      </head>
+      <body>
+        <div class="grid">
+          ${items.map(i => `
+            <div class="label">
+              <div class="label-name">${i.name.replace(/</g, '&lt;')}</div>
+              <svg class="label-barcode" id="bc-${i.barcode.replace(/[^a-zA-Z0-9]/g, '_')}"></svg>
+              <div class="label-code">${String(i.barcode).replace(/</g, '&lt;')}</div>
+            </div>
+          `).join('')}
+        </div>
+        <script>
+          window.onload = function() {
+            ${items.map(i => {
+              const safeId = 'bc-' + String(i.barcode).replace(/[^a-zA-Z0-9]/g, '_');
+              const safeBarcode = String(i.barcode).replace(/'/g, "\\'");
+              return `try { JsBarcode('#${safeId}', '${safeBarcode}', { width:1.2, height:40, displayValue:false, margin:0 }); } catch(e) {}`;
+            }).join('\n')}
+            setTimeout(() => window.print(), 400);
+          };
+        <\/script>
+      </body>
+      </html>
+    `);
+    doc.close();
+  }
+
+  // ── Modal helpers ─────────────────────────────────────────────
+
+  function openModal(id) {
+    document.getElementById(id).style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  // Close modals on overlay click
+  ['addModal', 'editModal'].forEach(id => {
+    document.getElementById(id).addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal(id);
+    });
+  });
+
+  // ── Init ──────────────────────────────────────────────────────
+  await Promise.all([loadItems(), loadLocations()]);
+})();
