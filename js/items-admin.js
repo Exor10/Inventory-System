@@ -239,7 +239,7 @@
             border: 1px solid #ccc;
             border-radius: 4px;
             padding: 4mm 5mm;
-            width: 60mm;
+            width: 90mm;
             text-align: center;
             page-break-inside: avoid;
           }
@@ -247,9 +247,7 @@
             font-size: 8pt;
             font-weight: 700;
             margin-bottom: 2mm;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            word-break: break-word;
           }
           .label-barcode { display: block; max-width: 100%; }
           .label-code { font-size: 7pt; color: #666; margin-top: 1mm; }
@@ -285,11 +283,50 @@
   // ── Import from label images ──────────────────────────────────
 
   const importQueue = []; // { id, objectUrl, barcode, status: 'scanning'|'ok'|'fail' }
-  let _scanner = null;
 
-  function getScanner() {
-    if (!_scanner) _scanner = new Html5Qrcode('importReader');
-    return _scanner;
+  // ZXing reader — reused across all decodes (stateless for image decoding)
+  const zxingReader = new ZXing.BrowserMultiFormatReader();
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload  = () => resolve(img);
+      img.onerror = reject;
+      img.src     = url;
+    });
+  }
+
+  async function decodeBarcode(objectUrl) {
+    // Attempt 1: decode straight from the object URL
+    try {
+      const result = await zxingReader.decodeFromImageUrl(objectUrl);
+      return result.getText();
+    } catch (_) {}
+
+    // Attempt 2: grayscale + contrast boost via canvas — helps with dark
+    // backgrounds and low-contrast label photos
+    try {
+      const img    = await loadImage(objectUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx  = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = imageData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        const boosted = Math.min(255, Math.max(0, 2.2 * (gray - 128) + 128));
+        d[i] = d[i + 1] = d[i + 2] = boosted;
+      }
+      ctx.putImageData(imageData, 0, 0);
+
+      const result = await zxingReader.decodeFromImageUrl(canvas.toDataURL());
+      return result.getText();
+    } catch (_) {}
+
+    return null; // both attempts failed — user types manually
   }
 
   document.getElementById('importBtn').addEventListener('click', () => {
@@ -322,7 +359,6 @@
   });
 
   async function addImportFiles(files) {
-    const scanner = getScanner();
     for (const file of files) {
       const id        = Math.random().toString(36).slice(2);
       const objectUrl = URL.createObjectURL(file);
@@ -331,12 +367,9 @@
       renderImportList();
       updateImportCount();
 
-      try {
-        entry.barcode = await scanner.scanFile(file, false);
-        entry.status  = 'ok';
-      } catch (_) {
-        entry.status = 'fail';
-      }
+      const decoded    = await decodeBarcode(objectUrl);
+      entry.barcode    = decoded || '';
+      entry.status     = decoded ? 'ok' : 'fail';
 
       // Update barcode input in-place without full re-render (preserves other typed values)
       const barcodeEl = document.getElementById(`ib-${id}`);
