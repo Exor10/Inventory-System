@@ -209,7 +209,18 @@ function startCamera() {
     html5QrScanner.start(
       cam.id,
       { fps: 10, qrbox: { width: 300, height: 80 } }, // wide + short for 1D barcodes
-      decoded => { submitScan(decoded); },
+      decoded => {
+        // Pause the decoder IMMEDIATELY so the same barcode can't fire again
+        // while the API call is in flight or during the cooldown window
+        try { html5QrScanner.pause(true); } catch (_) {}
+
+        submitScan(decoded).finally(() => {
+          // Resume 1.5 s after the scan resolves — user has time to move to next item
+          setTimeout(() => {
+            try { if (html5QrScanner) html5QrScanner.resume(); } catch (_) {}
+          }, 1500);
+        });
+      },
       () => {}
     ).catch(err => { showToast('Camera error: ' + err, 'error'); stopCamera(); });
   });
@@ -228,6 +239,9 @@ function stopCamera() {
 
 // ── Helpers ───────────────────────────────────────────────────
 function refocusBarcodeInput() {
+  // Don't steal focus back to the text input while camera is active —
+  // that would let a physical scanner inject a second scan into the field
+  if (cameraActive) return;
   const el = document.getElementById('barcodeInput');
   if (el && !el.disabled) setTimeout(() => el.focus(), 50);
 }
