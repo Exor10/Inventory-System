@@ -282,6 +282,205 @@
     doc.close();
   }
 
+  // ── Import from label images ──────────────────────────────────
+
+  const importQueue = []; // { id, objectUrl, barcode, status: 'scanning'|'ok'|'fail' }
+  let _scanner = null;
+
+  function getScanner() {
+    if (!_scanner) _scanner = new Html5Qrcode('importReader');
+    return _scanner;
+  }
+
+  document.getElementById('importBtn').addEventListener('click', () => {
+    // revoke any leftover object URLs
+    importQueue.forEach(e => URL.revokeObjectURL(e.objectUrl));
+    importQueue.length = 0;
+    renderImportList();
+    updateImportCount();
+    openModal('importModal');
+  });
+  document.getElementById('closeImportModal').addEventListener('click', () => closeModal('importModal'));
+  document.getElementById('cancelImport').addEventListener('click',      () => closeModal('importModal'));
+
+  const dropZone  = document.getElementById('importDropZone');
+  const fileInput = document.getElementById('importFileInput');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', e => {
+    if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over');
+  });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addImportFiles([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+  });
+  fileInput.addEventListener('change', () => {
+    addImportFiles([...fileInput.files]);
+    fileInput.value = '';
+  });
+
+  async function addImportFiles(files) {
+    const scanner = getScanner();
+    for (const file of files) {
+      const id        = Math.random().toString(36).slice(2);
+      const objectUrl = URL.createObjectURL(file);
+      const entry     = { id, objectUrl, barcode: '', status: 'scanning' };
+      importQueue.push(entry);
+      renderImportList();
+      updateImportCount();
+
+      try {
+        entry.barcode = await scanner.scanFile(file, false);
+        entry.status  = 'ok';
+      } catch (_) {
+        entry.status = 'fail';
+      }
+
+      // Update barcode input in-place without full re-render (preserves other typed values)
+      const barcodeEl = document.getElementById(`ib-${id}`);
+      const badgeEl   = document.getElementById(`ibadge-${id}`);
+      if (barcodeEl) {
+        barcodeEl.value    = entry.barcode;
+        barcodeEl.disabled = false;
+        barcodeEl.className = `import-field ${entry.status}`;
+        barcodeEl.placeholder = entry.status === 'ok'
+          ? '✓ Decoded'
+          : '⚠ Scan failed — type barcode manually';
+      }
+      if (badgeEl) {
+        badgeEl.textContent = entry.status === 'ok' ? '✓' : '⚠';
+        badgeEl.className   = `import-status-badge ${entry.status}`;
+      }
+      updateImportCount();
+    }
+  }
+
+  function renderImportList() {
+    const container = document.getElementById('importList');
+    if (!importQueue.length) {
+      container.innerHTML = '<div class="import-empty">Upload barcode images to get started</div>';
+      return;
+    }
+
+    container.innerHTML = importQueue.map(entry => `
+      <div class="import-row" id="row-${entry.id}">
+        <div class="import-row-top">
+          <img class="import-thumb" src="${entry.objectUrl}" alt="">
+          <span class="import-status-badge ${entry.status}" id="ibadge-${entry.id}">
+            ${entry.status === 'scanning' ? '↻' : entry.status === 'ok' ? '✓' : '⚠'}
+          </span>
+          <input
+            id="ib-${entry.id}"
+            class="import-field ${entry.status}"
+            placeholder="${entry.status === 'scanning' ? 'Scanning…' : entry.status === 'ok' ? '✓ Decoded' : '⚠ Scan failed — type barcode manually'}"
+            value="${esc(entry.barcode)}"
+            ${entry.status === 'scanning' ? 'disabled' : ''}
+            style="font-family:monospace"
+          >
+          <button class="btn-remove" data-id="${entry.id}" title="Remove">✕</button>
+        </div>
+        <div class="import-row-bottom">
+          <input  id="in-${entry.id}" class="import-field" placeholder="Item name *">
+          <select id="it-${entry.id}" class="import-field">
+            <option value="stock">Stock</option>
+            <option value="asset">Asset</option>
+            <option value="hybrid">Hybrid</option>
+          </select>
+          <input  id="iq-${entry.id}" class="import-field" type="number" min="0" value="0" title="Quantity">
+          <select id="il-${entry.id}" class="import-field">
+            <option value="">— Location —</option>
+            ${locations.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.btn-remove').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const idx = importQueue.findIndex(e => e.id === btn.dataset.id);
+        if (idx === -1) return;
+        URL.revokeObjectURL(importQueue[idx].objectUrl);
+        importQueue.splice(idx, 1);
+        renderImportList();
+        updateImportCount();
+      })
+    );
+  }
+
+  function updateImportCount() {
+    const total   = importQueue.length;
+    const done    = importQueue.filter(e => e.status !== 'scanning').length;
+    const countEl = document.getElementById('importCount');
+    const btn     = document.getElementById('importSubmitBtn');
+
+    if (!total) {
+      countEl.textContent  = '';
+      btn.disabled         = true;
+      btn.textContent      = 'Import Items';
+      return;
+    }
+
+    const scanning = done < total;
+    countEl.textContent = scanning
+      ? `Scanning… ${done} / ${total}`
+      : `${total} item${total !== 1 ? 's' : ''} ready to import`;
+    btn.disabled    = scanning;
+    btn.textContent = scanning ? 'Scanning…' : `Import ${total} Item${total !== 1 ? 's' : ''}`;
+  }
+
+  document.getElementById('importSubmitBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('importSubmitBtn');
+    btn.disabled    = true;
+    btn.textContent = 'Importing…';
+
+    let imported = 0;
+    let failed   = 0;
+
+    for (const entry of [...importQueue]) {
+      const barcode  = (document.getElementById(`ib-${entry.id}`)?.value  || '').trim();
+      const name     = (document.getElementById(`in-${entry.id}`)?.value  || '').trim();
+      const itemType =  document.getElementById(`it-${entry.id}`)?.value  || 'stock';
+      const qty      = parseInt(document.getElementById(`iq-${entry.id}`)?.value || '0', 10);
+      const location =  document.getElementById(`il-${entry.id}`)?.value  || '';
+      const row      =  document.getElementById(`row-${entry.id}`);
+
+      if (!barcode || !name) {
+        if (row) row.style.borderLeftColor = '#ef4444';
+        failed++;
+        continue;
+      }
+
+      const res = await api.createItem({ barcode, name, item_type: itemType, quantity: qty, location });
+      if (res.ok) {
+        if (row) row.style.borderLeftColor = '#22c55e';
+        imported++;
+      } else {
+        if (row) { row.style.borderLeftColor = '#ef4444'; row.title = res.error || 'Failed'; }
+        failed++;
+      }
+    }
+
+    if (failed === 0) {
+      // Clean up and close
+      importQueue.forEach(e => URL.revokeObjectURL(e.objectUrl));
+      importQueue.length = 0;
+      closeModal('importModal');
+      showToast(`${imported} item${imported !== 1 ? 's' : ''} imported`);
+      await loadItems();
+    } else {
+      btn.disabled    = false;
+      btn.textContent = `Retry (${failed} failed)`;
+      showToast(
+        imported > 0
+          ? `${imported} imported, ${failed} failed — fix red rows`
+          : `${failed} item${failed !== 1 ? 's' : ''} failed — barcode and name are required`,
+        'error'
+      );
+    }
+  });
+
   // ── Modal helpers ─────────────────────────────────────────────
 
   function openModal(id) {
@@ -294,7 +493,7 @@
   }
 
   // Close modals on overlay click
-  ['addModal', 'editModal'].forEach(id => {
+  ['addModal', 'editModal', 'importModal'].forEach(id => {
     document.getElementById(id).addEventListener('click', e => {
       if (e.target === e.currentTarget) closeModal(id);
     });
