@@ -188,16 +188,28 @@ function startCamera() {
   cameraActive = true;
   document.getElementById('cameraArea').style.display = 'block';
 
-  html5QrScanner = new Html5Qrcode('cameraArea');
+  // Include all common 1D barcode formats — default is QR-only
+  const formats = [
+    Html5QrcodeSupportedFormats.QR_CODE,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.CODE_93,
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.ITF,
+    Html5QrcodeSupportedFormats.CODABAR,
+  ];
+
+  html5QrScanner = new Html5Qrcode('cameraArea', { formatsToSupport: formats });
   Html5Qrcode.getCameras().then(cameras => {
     if (!cameras.length) { showToast('No cameras found', 'error'); stopCamera(); return; }
     const cam = cameras[cameras.length - 1]; // prefer rear camera
     html5QrScanner.start(
       cam.id,
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      decoded => {
-        submitScan(decoded);
-      },
+      { fps: 10, qrbox: { width: 300, height: 80 } }, // wide + short for 1D barcodes
+      decoded => { submitScan(decoded); },
       () => {}
     ).catch(err => { showToast('Camera error: ' + err, 'error'); stopCamera(); });
   });
