@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Items — Inventory System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Nav ── */
+    nav {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: .75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .nav-brand { font-weight: 700; color: #f1f5f9; font-size: 1rem; }
+    .nav-user  { font-size: .8rem; color: #94a3b8; }
+    #adminLinks { display: none; gap: .75rem; }
+    .nav-link {
+      font-size: .8rem;
+      color: #94a3b8;
+      text-decoration: none;
+      padding: .3rem .6rem;
+      border-radius: 6px;
+      transition: background .15s, color .15s;
+    }
+    .nav-link:hover, .nav-link.active { background: #334155; color: #f1f5f9; }
+    #logoutBtn {
+      font-size: .8rem;
+      color: #94a3b8;
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: .3rem .75rem;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      margin-left: auto;
+    }
+    #logoutBtn:hover { background: #334155; color: #f1f5f9; }
+
+    /* ── Layout ── */
+    main {
+      flex: 1;
+      padding: 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+    .page-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-right: auto;
+    }
+    #searchInput {
+      padding: .55rem .9rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: .85rem;
+      outline: none;
+      width: 220px;
+      transition: border-color .15s;
+    }
+    #searchInput::placeholder { color: #475569; }
+    #searchInput:focus { border-color: #3b82f6; }
+    #itemCount {
+      font-size: .75rem;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: .55rem 1rem;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-secondary {
+      background: none;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: .55rem 1rem;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .btn-secondary:hover { background: #1e293b; color: #f1f5f9; }
+
+    /* ── Banners ── */
+    #loadingBanner {
+      display: none;
+      align-items: center;
+      gap: .5rem;
+      font-size: .8rem;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #334155;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .85rem;
+    }
+    .data-table th {
+      text-align: left;
+      padding: .65rem 1rem;
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #64748b;
+      border-bottom: 1px solid #334155;
+      background: #1e293b;
+    }
+    .data-table td {
+      padding: .7rem 1rem;
+      border-bottom: 1px solid #0f172a;
+      color: #cbd5e1;
+      vertical-align: middle;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover td { background: #0f172a; }
+    .empty-cell {
+      text-align: center;
+      color: #475569;
+      font-size: .85rem;
+      padding: 3rem !important;
+    }
+    .mono { font-family: monospace; font-size: .8rem; color: #64748b; }
+    .col-name { font-weight: 600; color: #f1f5f9; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .type-badge { font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+    .qty-ok   { color: #86efac; font-weight: 700; }
+    .qty-zero { color: #f87171; font-weight: 700; }
+    .badge-out { background: #f97316; color: #fff; font-size: .65rem; font-weight: 700; padding: .15rem .4rem; border-radius: 4px; }
+    .badge-in  { background: #22c55e; color: #fff; font-size: .65rem; font-weight: 700; padding: .15rem .4rem; border-radius: 4px; }
+
+    .actions-cell { white-space: nowrap; }
+    .btn-icon {
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #94a3b8;
+      padding: .25rem .45rem;
+      cursor: pointer;
+      font-size: .85rem;
+      margin-left: .25rem;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .btn-edit:hover   { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+    .btn-delete:hover { background: #7f1d1d; border-color: #ef4444; color: #fff; }
+
+    /* ── Modal overlay ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 1rem;
+    }
+    .modal {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 1.75rem;
+      width: 100%;
+      max-width: 440px;
+    }
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 1.25rem;
+    }
+    .field {
+      margin-bottom: 1rem;
+    }
+    .field label {
+      display: block;
+      font-size: .75rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: .35rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: .65rem .9rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .field input:focus, .field select:focus { border-color: #3b82f6; }
+    .field select option { background: #1e293b; }
+    .modal-footer {
+      display: flex;
+      gap: .75rem;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+    }
+    .btn-cancel {
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #94a3b8;
+      padding: .6rem 1.25rem;
+      font-size: .9rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-cancel:hover { background: #0f172a; }
+    .btn-submit {
+      background: #3b82f6;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      padding: .6rem 1.25rem;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-submit:hover:not(:disabled) { background: #2563eb; }
+    .btn-submit:disabled { opacity: .5; cursor: default; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: .85rem 1.5rem;
+      font-size: .9rem;
+      font-weight: 600;
+      max-width: 90vw;
+      text-align: center;
+      transition: transform .25s ease, opacity .25s;
+      opacity: 0;
+      z-index: 300;
+      pointer-events: none;
+    }
+    .toast.show    { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.success { border-color: #22c55e; color: #86efac; }
+    .toast.error   { border-color: #ef4444; color: #fca5a5; }
+
+    /* ── Hidden print frame ── */
+    #printFrame { display: none; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-brand">&#9646;&#9646;&#9646; Inventory</span>
+  <div id="adminLinks">
+    <a href="dashboard.html"   class="nav-link">Dashboard</a>
+    <a href="items-admin.html" class="nav-link active">Items</a>
+    <a href="reports.html"     class="nav-link">Reports</a>
+  </div>
+  <a href="scanner.html" class="nav-link">Scanner</a>
+  <span class="nav-user">Signed in as <strong id="userLabel"></strong></span>
+  <button id="logoutBtn">Sign out</button>
+</nav>
+
+<main>
+  <div class="toolbar">
+    <h1 class="page-title">Items</h1>
+    <input id="searchInput" type="search" placeholder="Search name, barcode, location…">
+    <span id="itemCount"></span>
+    <button class="btn-secondary" id="printLabelsBtn">&#128424; Print Labels</button>
+    <button class="btn-primary"   id="addItemBtn">+ Add Item</button>
+  </div>
+
+  <div id="loadingBanner">
+    <div class="spinner"></div>
+    Loading…
+  </div>
+
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Barcode</th>
+          <th>Type</th>
+          <th>Qty</th>
+          <th>Location</th>
+          <th>Assigned To</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="itemsBody">
+        <tr><td colspan="7" class="empty-cell">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<!-- Add Item Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-title">Add Item</div>
+    <form id="addForm" autocomplete="off">
+      <div class="field">
+        <label for="itemBarcode">Barcode *</label>
+        <input id="itemBarcode" type="text" required placeholder="Scan or type barcode">
+      </div>
+      <div class="field">
+        <label for="itemName">Name *</label>
+        <input id="itemName" type="text" required placeholder="Item name">
+      </div>
+      <div class="field">
+        <label for="itemType">Type</label>
+        <select id="itemType">
+          <option value="stock">Stock (consumable, track qty)</option>
+          <option value="asset">Asset (single unit, check in/out)</option>
+          <option value="hybrid">Hybrid</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="itemQty">Initial Quantity</label>
+        <input id="itemQty" type="number" min="0" value="0">
+      </div>
+      <div class="field">
+        <label for="itemLocation">Location</label>
+        <select id="itemLocation"></select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" id="cancelAdd">Cancel</button>
+        <button type="submit" class="btn-submit" id="addSubmitBtn">Add Item</button>
+      </div>
+    </form>
+    <button class="btn-icon" id="closeAddModal" style="position:absolute;top:1rem;right:1rem;border:none;font-size:1.1rem">&#10005;</button>
+  </div>
+</div>
+
+<!-- Edit Item Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title">Edit Item</div>
+    <form id="editForm" autocomplete="off">
+      <input type="hidden" id="editBarcode">
+      <div class="field">
+        <label>Barcode</label>
+        <input type="text" id="editBarcodeDisplay" disabled style="opacity:.5;cursor:default">
+      </div>
+      <div class="field">
+        <label for="editName">Name *</label>
+        <input id="editName" type="text" required>
+      </div>
+      <div class="field">
+        <label for="editType">Type</label>
+        <select id="editType">
+          <option value="stock">Stock</option>
+          <option value="asset">Asset</option>
+          <option value="hybrid">Hybrid</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="editQty">Quantity</label>
+        <input id="editQty" type="number" min="0">
+      </div>
+      <div class="field">
+        <label for="editLocation">Location</label>
+        <select id="editLocation"></select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" id="cancelEdit">Cancel</button>
+        <button type="submit" class="btn-submit" id="editSubmitBtn">Save Changes</button>
+      </div>
+    </form>
+    <button class="btn-icon" id="closeEditModal" style="position:absolute;top:1rem;right:1rem;border:none;font-size:1.1rem">&#10005;</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<iframe id="printFrame"></iframe>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/items-admin.js"></script>
+</body>
+</html>
