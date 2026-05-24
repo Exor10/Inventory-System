@@ -329,6 +329,45 @@
     return null; // both attempts failed — user types manually
   }
 
+  // ── OCR (Tesseract.js) ────────────────────────────────────────
+
+  let _tesseractWorker = null;
+
+  async function getTesseractWorker() {
+    if (!_tesseractWorker) {
+      _tesseractWorker = await Tesseract.createWorker('eng');
+    }
+    return _tesseractWorker;
+  }
+
+  function extractProductName(rawText) {
+    const lines = rawText
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => {
+        if (l.length < 4) return false;
+        if (/^[\d\s.\-\/]+$/.test(l)) return false;               // all numbers / barcode digits
+        if (/www\.|\.com|\.net|\.org|\.io/i.test(l)) return false; // URLs
+        if (/^[A-Z]{0,4}\d{3,}[A-Z0-9]*$/.test(l)) return false;  // SKU codes e.g. HHT0241
+        if (/[™®©]/.test(l)) return false;                         // trademark / logo lines
+        return true;
+      });
+
+    if (!lines.length) return '';
+    // Longest remaining line is almost always the product description
+    return lines.sort((a, b) => b.length - a.length)[0];
+  }
+
+  async function recognizeText(objectUrl) {
+    try {
+      const worker        = await getTesseractWorker();
+      const { data: { text } } = await worker.recognize(objectUrl);
+      return extractProductName(text);
+    } catch (_) {
+      return '';
+    }
+  }
+
   document.getElementById('importBtn').addEventListener('click', () => {
     // revoke any leftover object URLs
     importQueue.forEach(e => URL.revokeObjectURL(e.objectUrl));
@@ -336,6 +375,8 @@
     renderImportList();
     updateImportCount();
     openModal('importModal');
+    // Pre-warm the Tesseract worker in the background so it's ready when images land
+    getTesseractWorker().catch(() => {});
   });
   document.getElementById('closeImportModal').addEventListener('click', () => closeModal('importModal'));
   document.getElementById('cancelImport').addEventListener('click',      () => closeModal('importModal'));
@@ -367,17 +408,22 @@
       renderImportList();
       updateImportCount();
 
-      const decoded    = await decodeBarcode(objectUrl);
-      entry.barcode    = decoded || '';
-      entry.status     = decoded ? 'ok' : 'fail';
+      // Run barcode decode and OCR in parallel
+      const [barcodeResult, ocrResult] = await Promise.allSettled([
+        decodeBarcode(objectUrl),
+        recognizeText(objectUrl),
+      ]);
 
-      // Update barcode input in-place without full re-render (preserves other typed values)
+      entry.barcode = barcodeResult.value || '';
+      entry.status  = barcodeResult.value ? 'ok' : 'fail';
+
+      // Update barcode field in-place (avoids re-render clobbering typed values)
       const barcodeEl = document.getElementById(`ib-${id}`);
       const badgeEl   = document.getElementById(`ibadge-${id}`);
       if (barcodeEl) {
-        barcodeEl.value    = entry.barcode;
-        barcodeEl.disabled = false;
-        barcodeEl.className = `import-field ${entry.status}`;
+        barcodeEl.value       = entry.barcode;
+        barcodeEl.disabled    = false;
+        barcodeEl.className   = `import-field ${entry.status}`;
         barcodeEl.placeholder = entry.status === 'ok'
           ? '✓ Decoded'
           : '⚠ Scan failed — type barcode manually';
@@ -386,6 +432,16 @@
         badgeEl.textContent = entry.status === 'ok' ? '✓' : '⚠';
         badgeEl.className   = `import-status-badge ${entry.status}`;
       }
+
+      // Pre-fill name field with OCR result if user hasn't typed anything yet
+      const nameEl  = document.getElementById(`in-${id}`);
+      const ocrName = ocrResult.value || '';
+      if (nameEl && !nameEl.value && ocrName) {
+        nameEl.value       = ocrName;
+        nameEl.title       = 'Pre-filled by OCR — verify before importing';
+        nameEl.style.borderColor = '#f59e0b'; // amber = needs review
+      }
+
       updateImportCount();
     }
   }
