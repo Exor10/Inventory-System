@@ -280,6 +280,98 @@
     doc.close();
   }
 
+  // ── Manage Locations ─────────────────────────────────────────
+
+  document.getElementById('manageLocationsBtn').addEventListener('click', async () => {
+    renderLocList();
+    openModal('locationsModal');
+  });
+  document.getElementById('closeLocationsModal').addEventListener('click',  () => closeModal('locationsModal'));
+  document.getElementById('closeLocationsModalX').addEventListener('click', () => closeModal('locationsModal'));
+
+  function renderLocList() {
+    const container = document.getElementById('locList');
+    if (!locations.length) {
+      container.innerHTML = '<div class="loc-empty">No locations yet — add one below</div>';
+      return;
+    }
+    container.innerHTML = locations.map(name => `
+      <div class="loc-row" id="locrow-${CSS.escape(name)}">
+        <span class="loc-name">${esc(name)}</span>
+        <button class="btn-loc-edit" data-loc="${esc(name)}">Edit</button>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.btn-loc-edit').forEach(btn =>
+      btn.addEventListener('click', () => startLocEdit(btn.dataset.loc))
+    );
+  }
+
+  function startLocEdit(name) {
+    const row = document.getElementById(`locrow-${CSS.escape(name)}`);
+    if (!row) return;
+    row.innerHTML = `
+      <input class="loc-input" id="locedit-${esc(name)}" value="${esc(name)}" autocomplete="off">
+      <button class="btn-loc-save"   data-loc="${esc(name)}">Save</button>
+      <button class="btn-loc-cancel" data-loc="${esc(name)}">Cancel</button>
+    `;
+    const input = row.querySelector('.loc-input');
+    input.focus();
+    input.select();
+
+    row.querySelector('.btn-loc-save').addEventListener('click', () => saveLocEdit(name));
+    row.querySelector('.btn-loc-cancel').addEventListener('click', () => renderLocList());
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  saveLocEdit(name);
+      if (e.key === 'Escape') renderLocList();
+    });
+  }
+
+  async function saveLocEdit(oldName) {
+    const input   = document.getElementById(`locedit-${CSS.escape(oldName)}`);
+    const newName = input?.value.trim();
+    if (!newName || newName === oldName) { renderLocList(); return; }
+
+    input.disabled = true;
+    const res = await api.updateLocation(oldName, newName);
+    if (!res.ok) {
+      showToast(res.error || 'Failed to rename location', 'error');
+      input.disabled = false;
+      return;
+    }
+
+    // Update local cache and dropdowns
+    const idx = locations.indexOf(oldName);
+    if (idx !== -1) locations[idx] = newName;
+    rebuildLocationSelect();
+    renderLocList();
+    showToast(`"${oldName}" renamed to "${newName}"`);
+  }
+
+  document.getElementById('addLocBtn').addEventListener('click', addNewLocation);
+  document.getElementById('newLocInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addNewLocation();
+  });
+
+  async function addNewLocation() {
+    const input = document.getElementById('newLocInput');
+    const name  = input.value.trim();
+    if (!name) return;
+
+    input.disabled = true;
+    const res = await api.createLocation(name);
+    input.disabled = false;
+
+    if (!res.ok) { showToast(res.error || 'Failed to add location', 'error'); return; }
+
+    locations.push(name);
+    rebuildLocationSelect();
+    renderLocList();
+    input.value = '';
+    input.focus();
+    showToast(`"${name}" added`);
+  }
+
   // ── Import from label images ──────────────────────────────────
 
   const importQueue = []; // { id, objectUrl, barcode, status: 'scanning'|'ok'|'fail' }
@@ -582,7 +674,7 @@
   }
 
   // Close modals on overlay click
-  ['addModal', 'editModal', 'importModal'].forEach(id => {
+  ['addModal', 'editModal', 'importModal', 'locationsModal'].forEach(id => {
     document.getElementById(id).addEventListener('click', e => {
       if (e.target === e.currentTarget) closeModal(id);
     });

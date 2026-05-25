@@ -59,5 +59,7 @@ const api = (() => {
     deleteItem(barcode)              { return call({ action: 'delete_item', barcode }); },
     listMovements(dateFrom, dateTo)  { return call({ action: 'list_movements', date_from: dateFrom, date_to: dateTo }); },
     listLocations()                  { return call({ action: 'list_locations' }); },
+    createLocation(name)             { return call({ action: 'create_location', name }); },
+    updateLocation(name, newName)    { return call({ action: 'update_location', name, new_name: newName }); },
   };
 })();

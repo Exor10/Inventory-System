@@ -304,6 +304,97 @@
     /* ── Hidden print frame ── */
     #printFrame { display: none; }
 
+    /* ── Locations modal ── */
+    .loc-list {
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+      max-height: 360px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+    .loc-row {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .5rem .65rem;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+    }
+    .loc-name {
+      flex: 1;
+      font-size: .9rem;
+      color: #e2e8f0;
+    }
+    .loc-input {
+      flex: 1;
+      padding: .35rem .6rem;
+      background: #1e293b;
+      border: 1px solid #3b82f6;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: .9rem;
+      outline: none;
+    }
+    .btn-loc-edit {
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #94a3b8;
+      padding: .25rem .55rem;
+      font-size: .8rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, color .15s;
+    }
+    .btn-loc-edit:hover { background: #1e293b; color: #f1f5f9; }
+    .btn-loc-save {
+      background: #3b82f6;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      padding: .25rem .65rem;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-loc-save:hover { background: #2563eb; }
+    .btn-loc-cancel {
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #64748b;
+      padding: .25rem .5rem;
+      font-size: .8rem;
+      cursor: pointer;
+    }
+    .btn-loc-cancel:hover { color: #f1f5f9; }
+    .loc-add-row {
+      display: flex;
+      gap: .5rem;
+      margin-top: .25rem;
+    }
+    .loc-add-row input {
+      flex: 1;
+      padding: .55rem .8rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: .85rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .loc-add-row input:focus { border-color: #3b82f6; }
+    .loc-empty {
+      text-align: center;
+      color: #475569;
+      font-size: .85rem;
+      padding: 1.5rem;
+    }
+
     /* ── Import modal ── */
     .import-wide { max-width: 820px; }
     .drop-zone {
@@ -441,6 +532,7 @@
     <h1 class="page-title">Items</h1>
     <input id="searchInput" type="search" placeholder="Search name, barcode, location…">
     <span id="itemCount"></span>
+    <button class="btn-secondary" id="manageLocationsBtn">&#128205; Locations</button>
     <button class="btn-secondary" id="printLabelsBtn">&#128424; Print Labels</button>
     <button class="btn-secondary" id="importBtn">&#8593; Import Existing…</button>
     <button class="btn-primary"   id="addItemBtn">+ Add Item</button>
@@ -470,6 +562,28 @@
     </table>
   </div>
 </main>
+
+<!-- Manage Locations Modal -->
+<div class="modal-overlay" id="locationsModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">Manage Locations</div>
+
+    <div id="locList" class="loc-list">
+      <div class="loc-empty">Loading…</div>
+    </div>
+
+    <div class="loc-add-row">
+      <input id="newLocInput" type="text" placeholder="New location name…" autocomplete="off">
+      <button class="btn-submit" id="addLocBtn" style="white-space:nowrap;padding:.55rem 1rem">Add</button>
+    </div>
+
+    <div class="modal-footer" style="margin-top:1.25rem;justify-content:flex-end">
+      <button class="btn-cancel" id="closeLocationsModal">Done</button>
+    </div>
+
+    <button class="btn-icon" id="closeLocationsModalX" style="position:absolute;top:1rem;right:1rem;border:none;font-size:1.1rem">&#10005;</button>
+  </div>
+</div>
 
 <!-- Add Item Modal -->
 <div class="modal-overlay" id="addModal">
