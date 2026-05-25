@@ -68,15 +68,22 @@
   // ── Summary cards ─────────────────────────────────────────────
 
   function renderSummaryCards(movements) {
-    const total   = movements.length;
-    const byType  = {};
-    movements.forEach(m => { byType[m.action] = (byType[m.action] || 0) + 1; });
+    const total    = movements.length;
+    const byCount  = {};
+    let   unitsIn  = 0;
+    let   unitsOut = 0;
+    movements.forEach(m => {
+      byCount[m.action] = (byCount[m.action] || 0) + 1;
+      const delta = Number(m.quantity_delta) || 0;
+      if (m.action === 'in')  unitsIn  += delta;
+      if (m.action === 'out') unitsOut += Math.abs(delta);
+    });
 
     document.getElementById('statTotal').textContent    = total;
-    document.getElementById('statIn').textContent       = byType['in']       || 0;
-    document.getElementById('statOut').textContent      = byType['out']      || 0;
-    document.getElementById('statCheckout').textContent = byType['checkout'] || 0;
-    document.getElementById('statCheckin').textContent  = byType['checkin']  || 0;
+    document.getElementById('statIn').textContent       = unitsIn;
+    document.getElementById('statOut').textContent      = unitsOut;
+    document.getElementById('statCheckout').textContent = byCount['checkout'] || 0;
+    document.getElementById('statCheckin').textContent  = byCount['checkin']  || 0;
   }
 
   // ── Bar chart ─────────────────────────────────────────────────
