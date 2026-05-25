@@ -63,8 +63,10 @@ function route(e) {
     if (action === 'create_item')    return respond(handleCreateItem(params, auth.user));
     if (action === 'update_item')    return respond(handleUpdateItem(params, auth.user));
     if (action === 'delete_item')    return respond(handleDeleteItem(params, auth.user));
-    if (action === 'list_movements') return respond(handleListMovements(params, auth.user));
-    if (action === 'list_locations') return respond(handleListLocations(auth.user));
+    if (action === 'list_movements')   return respond(handleListMovements(params, auth.user));
+    if (action === 'list_locations')   return respond(handleListLocations(auth.user));
+    if (action === 'create_location')  return respond(handleCreateLocation(params, auth.user));
+    if (action === 'update_location')  return respond(handleUpdateLocation(params, auth.user));
 
     return respond({ ok: false, error: 'Unknown action: ' + action }, 400);
   } catch (err) {
@@ -426,6 +428,65 @@ function handleListLocations(user) {
     out.push({ name: r[LOC_COL.NAME - 1] });
   }
   return { ok: true, data: out };
+}
+
+// ── create_location ──────────────────────────────────────────
+function handleCreateLocation(params, user) {
+  var chk = requireAdmin(user);
+  if (!chk.ok) return chk;
+
+  var name = (params.name || '').trim();
+  if (!name) return { ok: false, error: 'name required' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(_) { return { ok: false, error: 'Server busy' }; }
+
+  try {
+    var ss    = getSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET.LOCATIONS);
+    var rows  = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][LOC_COL.NAME - 1]).toLowerCase() === name.toLowerCase()) {
+        return { ok: false, error: 'Location already exists' };
+      }
+    }
+
+    sheet.appendRow([name, true]);
+    return { ok: true, data: { name: name } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── update_location ──────────────────────────────────────────
+function handleUpdateLocation(params, user) {
+  var chk = requireAdmin(user);
+  if (!chk.ok) return chk;
+
+  var name    = (params.name || '').trim();
+  var newName = (params.new_name || '').trim();
+  if (!name)    return { ok: false, error: 'name required' };
+  if (!newName) return { ok: false, error: 'new_name required' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(_) { return { ok: false, error: 'Server busy' }; }
+
+  try {
+    var ss    = getSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET.LOCATIONS);
+    var rows  = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][LOC_COL.NAME - 1]).toLowerCase() === name.toLowerCase()) {
+        sheet.getRange(i + 1, LOC_COL.NAME).setValue(newName);
+        return { ok: true, data: { name: newName } };
+      }
+    }
+    return { ok: false, error: 'Location not found' };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ============================================================
