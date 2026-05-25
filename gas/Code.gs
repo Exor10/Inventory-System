@@ -392,6 +392,7 @@ function handleDeleteItem(params, user) {
 function handleListMovements(params, user) {
   var from = params.date_from ? new Date(params.date_from) : new Date(Date.now() - 7*24*60*60*1000);
   var to   = params.date_to   ? new Date(params.date_to)   : new Date();
+  from.setHours(0, 0, 0, 0);
   to.setHours(23, 59, 59, 999);
 
   var ss    = getSpreadsheet();
@@ -503,7 +504,8 @@ function findItemByBarcode(ss, barcode) {
   var rows  = sheet.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
-    if (String(r[ITEMS_COL.BARCODE - 1]) === String(barcode)) {
+    if (String(r[ITEMS_COL.BARCODE - 1]) === String(barcode) &&
+        String(r[ITEMS_COL.ACTIVE - 1]).toUpperCase() === 'TRUE') {
       return rowToItem(r, i + 1);
     }
   }

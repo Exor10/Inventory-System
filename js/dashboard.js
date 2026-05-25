@@ -40,7 +40,10 @@
     const totalItems = items.length;
     const totalQty   = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
     const checkedOut = items.filter(i => i.assigned_to).length;
-    const available  = items.filter(i => !i.assigned_to).length;
+    // Assets are available when not checked out; stock items are available when qty > 0
+    const available  = items.filter(i =>
+      i.item_type === 'asset' ? !i.assigned_to : (Number(i.quantity) || 0) > 0
+    ).length;
 
     document.getElementById('statTotalItems').textContent = totalItems;
     document.getElementById('statTotalQty').textContent   = totalQty;
