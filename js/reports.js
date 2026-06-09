@@ -187,14 +187,18 @@
     const rows    = movements.map(m =>
       headers.map(h => {
         const v = String(m[h] ?? '');
+        const escaped = v.replace(/"/g, '""');
+        // Force Excel to treat barcode as text so long numeric barcodes
+        // don't get converted to scientific notation (e.g. 8.11624E+11).
+        if (h === 'barcode' && v !== '') return `="${escaped}"`;
         return v.includes(',') || v.includes('"') || v.includes('\n')
-          ? `"${v.replace(/"/g, '""')}"`
+          ? `"${escaped}"`
           : v;
       }).join(',')
     );
 
-    const csv  = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const csv  = ['﻿' + headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     const { from, to } = window._reportRange || {};
